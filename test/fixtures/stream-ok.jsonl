@@ -1,0 +1,4 @@
+{"role":"meta","type":"system.version","version":"0.36.1"}
+{"role":"assistant","content":"UserPromptSubmit hook\n\n# ⚠️ Rappels permanents (bruit de hook)"}
+{"role":"assistant","content":"PONG"}
+{"role":"meta","type":"session.resume_hint","session_id":"session_x","command":"kimi -r session_x","content":"To resume this session: kimi -r session_x"}
