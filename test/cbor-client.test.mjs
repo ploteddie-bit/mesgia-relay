@@ -69,6 +69,7 @@ test('register : GET challenge avec header wallet, signature couvre POST:/api/cb
   assert.deepEqual(JSON.parse(reg.body), {
     wallet_address: wallet.address,
     display_name: 'Relais Test',
+    is_public: false,
     nonce: 'challenge-reg-1',
     signature: reg.headers['X-CBOR-Web-Sig'],
   })

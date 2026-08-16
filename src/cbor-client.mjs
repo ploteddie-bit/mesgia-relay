@@ -38,7 +38,7 @@ async function fetchChallenge(base, wallet) {
  * 3. POST /api/cbor-web/register avec le challenge dans le header X-CBOR-Web-Nonce
  *    ET dans body.nonce (rétrocompat source du nonce côté serveur).
  */
-export async function register({ api, wallet, displayName, privateKey }) {
+export async function register({ api, wallet, displayName, privateKey, webhookUrl, isPublic }) {
   const base = String(api).replace(/\/+$/, '')
 
   let challenge
@@ -55,6 +55,8 @@ export async function register({ api, wallet, displayName, privateKey }) {
   const payload = {
     wallet_address: wallet,
     display_name: displayName,
+    webhook_url: webhookUrl ?? undefined,
+    is_public: isPublic === true,
     nonce: challenge,
     signature,
   }
