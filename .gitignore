@@ -1,4 +1,6 @@
 .env
 *.log
 *.pid
+*.bak.*
 node_modules/
+versions/
