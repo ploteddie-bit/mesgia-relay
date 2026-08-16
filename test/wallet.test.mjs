@@ -22,8 +22,10 @@ test('tampered signature does not recover to the wallet address', () => {
   const wallet = generateWallet()
   const message = 'POST:/api/cbor-web/messages:challenge-uuid:deadbeef'
   const signature = signEIP191(message, wallet.privateKey)
-  // Flip one nibble in the middle of the r part to falsify the signature.
+  // Flip one nibble in the middle of the s part to falsify the signature.
+  // (Falsifier r peut produire un point hors courbe → recoverPublicKey throw,
+  // ce qui rendait ce test flaky selon le wallet aléatoire généré.)
   const hex = signature.slice(2)
-  const flipped = hex.slice(0, 40) + (parseInt(hex[40], 16) ^ 1).toString(16) + hex.slice(41)
+  const flipped = hex.slice(0, 90) + (parseInt(hex[90], 16) ^ 1).toString(16) + hex.slice(91)
   assert.notEqual(recoverAddress(message, '0x' + flipped), wallet.address)
 })
