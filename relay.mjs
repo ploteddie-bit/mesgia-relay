@@ -1,6 +1,7 @@
 import { loadDotEnv } from './src/env.mjs'
 import { buildPrompt, invokeBrain, SYSTEM_PROMPT } from './src/brain.mjs'
 import { invokeBrainIAQ } from './src/iaq-brain.mjs'
+import { invokeBrainOllama } from './src/ollama-brain.mjs'
 import { postReply, deriveAddress } from './src/cbor-client.mjs'
 import { createRelayServer } from './src/server.mjs'
 import { createReplayGuard } from './src/replay-guard.mjs'
@@ -13,10 +14,11 @@ if (missing.length) {
   process.exit(1)
 }
 
-// Cerveau : "cli" (kimi -p, défaut) ou "iaq" (IAQ Router sur ia-general).
+// Cerveau : "cli" (kimi -p, défaut), "iaq" (IAQ Router sur ia-general)
+// ou "ollama" (Ollama local à l'hôte du relais — sans file IAQ, cf. ollama-brain.mjs).
 const brainMode = env.BRAIN_MODE ?? 'cli'
-if (!['cli', 'iaq'].includes(brainMode)) {
-  console.error(`BRAIN_MODE invalide : ${brainMode} (attendu "cli" ou "iaq")`)
+if (!['cli', 'iaq', 'ollama'].includes(brainMode)) {
+  console.error(`BRAIN_MODE invalide : ${brainMode} (attendu "cli", "iaq" ou "ollama")`)
   process.exit(1)
 }
 
@@ -41,6 +43,16 @@ if (brainMode === 'iaq') {
     token: env.IAQ_TOKEN,
     model: env.IAQ_MODEL || 'qwen35-9b',
     timeoutMs: parseTimeoutMs(env.BRAIN_TIMEOUT_MS, 180_000),
+    log,
+  })
+} else if (brainMode === 'ollama') {
+  brain = async (message) => invokeBrainOllama({
+    systemPrompt: SYSTEM_PROMPT,
+    userMessage: message,
+    apiUrl: env.OLLAMA_URL || 'http://127.0.0.1:11434',
+    model: env.OLLAMA_MODEL || 'qwen2.5:7b-instruct-q4_K_M',
+    keepAlive: env.OLLAMA_KEEP_ALIVE || '4h',
+    timeoutMs: parseTimeoutMs(env.BRAIN_TIMEOUT_MS, 60_000),
     log,
   })
 } else {
