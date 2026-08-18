@@ -6,3 +6,4 @@ node_modules/
 versions/
 data/
 dead-letters/
+coverage/

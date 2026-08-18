@@ -16,7 +16,7 @@ const MODEL = 'qwen35-9b'
  *  - GET  /task/{id}     → état selon le script de status
  *  - GET  /task/{id}/artifact/result.html → {content, encoding}
  */
-function startIaqStub({ submitStatus = 201, statuses = ['completed'], artifact = 'PONG', artifactStatus = 200, submitBody = null }) {
+function startIaqStub({ submitStatus = 201, statuses = ['completed'], artifact = 'PONG', artifactStatus = 200, submitBody = null, submitNonJson = false, taskNonJson = false, artifactNonJson = false }) {
   const received = []
   const server = http.createServer((req, res) => {
     let body = ''
@@ -28,11 +28,19 @@ function startIaqStub({ submitStatus = 201, statuses = ['completed'], artifact =
           res.writeHead(submitStatus, { 'Content-Type': 'application/json' })
           return res.end(JSON.stringify({ error: 'Non autorisé' }))
         }
+        if (submitNonJson) {
+          res.writeHead(201, { 'Content-Type': 'text/plain' })
+          return res.end('pas du json')
+        }
         res.writeHead(201, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ id: 'task-1' }))
       }
       const m = req.url.match(/^\/task\/([^/]+)$/)
       if (m) {
+        if (taskNonJson) {
+          res.writeHead(200, { 'Content-Type': 'text/plain' })
+          return res.end('pas du json')
+        }
         const status = statuses.shift() ?? 'completed'
         const payload = status === 'failed'
           ? { status, error: 'erreur infer' }
@@ -44,6 +52,10 @@ function startIaqStub({ submitStatus = 201, statuses = ['completed'], artifact =
         if (artifactStatus !== 200) {
           res.writeHead(artifactStatus, { 'Content-Type': 'application/json' })
           return res.end(JSON.stringify({ error: 'Artifact introuvable' }))
+        }
+        if (artifactNonJson) {
+          res.writeHead(200, { 'Content-Type': 'text/plain' })
+          return res.end('pas du json')
         }
         res.writeHead(200, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ content: artifact, encoding: 'text' }))
@@ -164,6 +176,41 @@ test('token jamais présent dans les logs', async () => {
     assert.ok(!line.includes(TOKEN), `log ne doit pas contenir le token : ${line}`)
     assert.ok(!line.includes('Authorization'), 'log ne doit pas mentionner Authorization')
   }
+})
+
+test('submit 201 non-JSON → {ok:false} générique', async () => {
+  const stub = await startIaqStub({ submitNonJson: true })
+  const logs = []
+  const r = await invokeBrainIAQ({
+    prompt: 'x', apiUrl: `http://127.0.0.1:${stub.port}`, token: TOKEN, model: MODEL,
+    timeoutMs: 10_000, log: (m) => logs.push(m),
+  })
+  await close(stub)
+  assert.equal(r.ok, false)
+  assert.equal(r.error, 'réponse submit IAQ non-JSON')
+  assert.ok(logs.some((l) => l.includes('non-JSON')))
+})
+
+test('task 200 non-JSON → {ok:false} générique', async () => {
+  const stub = await startIaqStub({ taskNonJson: true })
+  const r = await invokeBrainIAQ({
+    prompt: 'x', apiUrl: `http://127.0.0.1:${stub.port}`, token: TOKEN, model: MODEL,
+    timeoutMs: 10_000,
+  })
+  await close(stub)
+  assert.equal(r.ok, false)
+  assert.equal(r.error, 'réponse task IAQ non-JSON')
+})
+
+test('artifact 200 non-JSON → {ok:false} générique', async () => {
+  const stub = await startIaqStub({ statuses: ['completed'], artifactNonJson: true })
+  const r = await invokeBrainIAQ({
+    prompt: 'x', apiUrl: `http://127.0.0.1:${stub.port}`, token: TOKEN, model: MODEL,
+    timeoutMs: 10_000,
+  })
+  await close(stub)
+  assert.equal(r.ok, false)
+  assert.equal(r.error, 'réponse artifact IAQ non-JSON')
 })
 
 test('défaut : IAQ_DEFAULT_TIMEOUT_MS raisonnable (>= 120 s, latence réelle ~90 s)', () => {
