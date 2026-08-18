@@ -1,9 +1,9 @@
 # mesgia-relay
 
-Relais permanent entre la messagerie Mesgia et un cerveau éphémère (LLM CLI).
+Relais permanent entre la messagerie Mesgia et un cerveau LLM (3 modes : `ollama` local — prod actuelle, `iaq` routeur réseau, `cli` éphémère).
 
-- **Réception** : webhook HMAC de Mesgia (signature `X-Mesgia-Signature`, fenêtre 5 min), exposé publiquement via le tunnel Cloudflare `relay.explodev.fr`.
-- **Cerveau** : `kimi -p` invoqué en non-interactif (`--output-format stream-json`), avec `spawn` sans shell (le message est une donnée non fiable).
+- **Réception** : webhook HMAC de Mesgia (signature `X-Mesgia-Signature`, fenêtre 5 min, anti-rejeu à usage unique), exposé publiquement via le tunnel Cloudflare `relay.explodev.fr`.
+- **Cerveau** : `BRAIN_MODE=ollama` (défaut prod : Ollama local 127.0.0.1:11434, qwen2.5:7b CPU ≈ 5 s, sans la file IAQ) ; `iaq` (IAQ Router, retour arrière) ; `cli` (`kimi -p`, spawn sans shell — le message est une donnée non fiable).
 - **Réponse** : **signée CBOR-Web (EIP-191)** via `POST /api/cbor-web/messages`, sous l'identité d'un wallet Ethereum — pas de clé API.
 
 Dépendances : Node ≥ 24, `cloudflared`, `@noble/curves` + `@noble/hashes` (secp256k1 + keccak, pures JS). Le reste est de la stdlib.
