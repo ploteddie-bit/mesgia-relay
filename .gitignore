@@ -4,3 +4,5 @@
 *.bak.*
 node_modules/
 versions/
+data/
+dead-letters/

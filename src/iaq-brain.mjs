@@ -1,3 +1,5 @@
+import { MAX_INPUT_CHARS } from './brain.mjs'
+
 /**
  * Cerveau IAQ Router (alternative phase 1.5).
  *
@@ -52,13 +54,13 @@ function httpError(label, status, body, log) {
   return new Error(`${label} HTTP ${status}`)
 }
 
-async function submit({ prompt, apiUrl, token, model, deadline, log }) {
+async function submit({ messages, apiUrl, token, model, deadline, log }) {
   const body = JSON.stringify({
     type: 'inference',
     origin: IAQ_ORIGIN,
     priority: IAQ_PRIORITY,
     model,
-    payload: { messages: [{ role: 'user', content: prompt }] },
+    payload: { messages },
   })
   let res
   try {
@@ -136,14 +138,25 @@ async function fetchArtifact(taskId, { apiUrl, token, deadline, log }) {
 }
 
 /**
- * @param {{ prompt: string, apiUrl: string, token: string, model: string,
+ * @param {{ prompt?: string, systemPrompt?: string, userMessage?: string,
+ *           apiUrl: string, token: string, model: string,
  *           timeoutMs?: number, log?: (msg: string) => void }} args
  * @returns {Promise<{ok: true, reply: string} | {ok: false, error: string}>}
  */
-export async function invokeBrainIAQ({ prompt, apiUrl, token, model, timeoutMs = IAQ_DEFAULT_TIMEOUT_MS, log = () => {} }) {
+export async function invokeBrainIAQ({ prompt, systemPrompt, userMessage, apiUrl, token, model, timeoutMs = IAQ_DEFAULT_TIMEOUT_MS, log = () => {} }) {
+  // Anti-injection (P1-2) : les consignes relais partent en rôle system, le contenu
+  // utilisateur en rôle user. La rétrocompat `prompt` (un seul message user) est
+  // conservée pour les appels existants et les tests.
+  const messages = (systemPrompt !== undefined && userMessage !== undefined)
+    ? [
+        { role: 'system', content: String(systemPrompt) },
+        { role: 'user', content: String(userMessage).slice(0, MAX_INPUT_CHARS) },
+      ]
+    : [{ role: 'user', content: prompt }]
+
   const deadline = Date.now() + timeoutMs
   try {
-    const taskId = await submit({ prompt, apiUrl, token, model, deadline, log })
+    const taskId = await submit({ messages, apiUrl, token, model, deadline, log })
 
     let status = null
     while (Date.now() < deadline) {

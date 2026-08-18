@@ -2,9 +2,15 @@ import { createHash } from 'node:crypto'
 import { signEIP191, recoverAddress } from './wallet.mjs'
 
 export const MAX_MESSAGE_CHARS = 5000
+export const FETCH_TIMEOUT_MS = 10_000
 
 function sha256Hex(input) {
   return createHash('sha256').update(input).digest('hex')
+}
+
+/** true si l'erreur vient d'un AbortSignal.timeout / AbortController. */
+function isTimeout(err) {
+  return err?.name === 'AbortError' || err?.name === 'TimeoutError'
 }
 
 /**
@@ -20,9 +26,10 @@ export function deriveAddress(privateKey) {
 async function fetchChallenge(base, wallet) {
   const res = await fetch(`${base}/api/cbor-web/challenge`, {
     headers: { 'X-CBOR-Web-Wallet': wallet },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   })
   if (!res.ok) {
-    return { ok: false, error: `challenge HTTP ${res.status}: ${(await res.text()).slice(0, 200)}` }
+    return { ok: false, error: `challenge HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`, status: res.status }
   }
   const body = await res.json()
   if (!body.challenge || typeof body.challenge !== 'string') {
@@ -47,6 +54,7 @@ export async function register({ api, wallet, displayName, privateKey, webhookUr
     if (!res.ok) return { ok: false, error: res.error }
     challenge = res.challenge
   } catch (err) {
+    if (isTimeout(err)) return { ok: false, error: 'timeout' }
     return { ok: false, error: `challenge fetch échoué: ${err.message}` }
   }
 
@@ -78,7 +86,7 @@ export async function register({ api, wallet, displayName, privateKey, webhookUr
   }
   const text = await res.text()
   if (!res.ok) {
-    return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` }
+    return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}`, status: res.status }
   }
   let body = null
   try { body = JSON.parse(text) } catch { /* réponse non-JSON : acceptée */ }
@@ -99,10 +107,11 @@ export async function postReply({ api, wallet, privateKey, conversationId, messa
   let challenge
   try {
     const res = await fetchChallenge(base, wallet)
-    if (!res.ok) return { ok: false, error: res.error }
+    if (!res.ok) return { ok: false, error: res.error, status: res.status }
     challenge = res.challenge
   } catch (err) {
-    return { ok: false, error: `challenge fetch échoué: ${err.message}` }
+    if (isTimeout(err)) return { ok: false, error: 'timeout', retryable: true }
+    return { ok: false, error: `challenge fetch échoué: ${err.message}`, retryable: true }
   }
 
   const messageToSign = `POST:/api/cbor-web/messages:${challenge}:${bodyHash}`
@@ -119,13 +128,15 @@ export async function postReply({ api, wallet, privateKey, conversationId, messa
         'X-CBOR-Web-Nonce': challenge,
       },
       body: bodyStr,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
   } catch (err) {
-    return { ok: false, error: `fetch échoué: ${err.message}` }
+    if (isTimeout(err)) return { ok: false, error: 'timeout', retryable: true }
+    return { ok: false, error: `fetch échoué: ${err.message}`, retryable: true }
   }
   const text = await res.text()
   if (!res.ok) {
-    return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` }
+    return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}`, status: res.status }
   }
   let body = null
   try { body = JSON.parse(text) } catch { /* réponse non-JSON : acceptée */ }

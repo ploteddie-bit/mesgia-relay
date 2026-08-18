@@ -1,8 +1,9 @@
 import { loadDotEnv } from './src/env.mjs'
-import { buildPrompt, invokeBrain } from './src/brain.mjs'
+import { buildPrompt, invokeBrain, SYSTEM_PROMPT } from './src/brain.mjs'
 import { invokeBrainIAQ } from './src/iaq-brain.mjs'
 import { postReply, deriveAddress } from './src/cbor-client.mjs'
 import { createRelayServer } from './src/server.mjs'
+import { createReplayGuard } from './src/replay-guard.mjs'
 
 const env = { ...loadDotEnv(new URL('.env', import.meta.url).pathname), ...process.env }
 const required = ['MESGIA_API', 'MESGIA_WALLET_KEY', 'MESGIA_WEBHOOK_SECRET']
@@ -34,7 +35,8 @@ if (brainMode === 'iaq') {
     process.exit(1)
   }
   brain = async (message) => invokeBrainIAQ({
-    prompt: buildPrompt(message),
+    systemPrompt: SYSTEM_PROMPT,
+    userMessage: message,
     apiUrl: env.IAQ_API_URL || 'http://10.0.0.223:8001',
     token: env.IAQ_TOKEN,
     model: env.IAQ_MODEL || 'qwen35-9b',
@@ -60,6 +62,10 @@ const server = createRelayServer({
     wallet: walletAddress,
     privateKey: env.MESGIA_WALLET_KEY,
     conversationId, message,
+  }),
+  replayGuard: createReplayGuard({
+    filePath: new URL('./data/seen-nonces.json', import.meta.url).pathname,
+    onError: (err) => log(`anti-rejeu persistance: ${err?.message ?? err}`),
   }),
   log,
 })
