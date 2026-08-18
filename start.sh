@@ -9,28 +9,31 @@ if ! command -v cloudflared >/dev/null 2>&1; then
   exit 1
 fi
 [ -f .env ] || { echo "ERREUR : .env absent (copier .env.example)." >&2; exit 1; }
+[ -f "$HOME/.cloudflared/relay-token.txt" ] || { echo "ERREUR : $HOME/.cloudflared/relay-token.txt absent (token tunnel nommé)." >&2; exit 1; }
 
 node relay.mjs >> relay.log 2>&1 &
 echo $! > relay.pid
 
 cflog="$(mktemp /tmp/mesgia-relay-cf.XXXXXX.log)"
-cloudflared tunnel --url "http://localhost:$PORT" --no-autoupdate >> "$cflog" 2>&1 &
+cloudflared tunnel --no-autoupdate run --token "$(cat "$HOME/.cloudflared/relay-token.txt")" --url "http://localhost:$PORT" >> "$cflog" 2>&1 &
 echo $! > cloudflared.pid
 
+# Tunnel nommé : hostname FIXE relay.explodev.fr (déjà dans l'allow-list prod)
+HOST="relay.explodev.fr"
 url=""
 for _ in $(seq 1 30); do
-  url="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$cflog" | head -1 || true)"
-  [ -n "$url" ] && break
+  if curl -s -m 2 "https://$HOST/healthz" | grep -q '"ok":true' 2>/dev/null; then
+    url="https://$HOST"
+    break
+  fi
   sleep 1
 done
 if [ -z "$url" ]; then
-  echo "ERREUR : URL du tunnel non obtenue (log : $cflog)" >&2
+  echo "ERREUR : tunnel $HOST non opérationnel (log : $cflog)" >&2
   exit 1
 fi
-host="${url#https://}"
 
 echo ""
-echo "=== VALEURS À RECOLLER (quick tunnel : changent à chaque redémarrage) ==="
-echo "1/2 webhookUrl de l'agent (prod)      : $url"
-echo "2/2 WEBHOOK_ALLOWED_HOSTS (hostname)  : $host"
+echo "=== RELAIS EN LIGNE ==="
+echo "URL fixe (déjà dans l'allow-list prod) : $url"
 echo "Log cloudflared : $cflog"
